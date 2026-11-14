@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#14181b"/>
+  <rect x="150" y="118" width="74" height="104" rx="10" fill="#f2c200" transform="rotate(-10 187 170)"/>
+  <rect x="228" y="110" width="74" height="104" rx="10" fill="#d42a1e" transform="rotate(8 265 162)"/>
+  <text x="256" y="350" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="150" fill="#ffffff">SR</text>
+  <rect x="146" y="378" width="220" height="16" rx="8" fill="#2fb673"/>
+</svg>
