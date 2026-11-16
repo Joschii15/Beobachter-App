@@ -82,6 +82,8 @@ export interface Settings {
   defaultHalfLength: number;
   theme: ThemeSetting;
   lastBackupAt: number | null;
+  /** Zusatzabstand oben in Pixeln (Umgehung eines iOS-Anzeigefehlers); null = automatisch */
+  topOffset: number | null;
 }
 
 export const PERSON_LABEL: Record<Person, string> = {

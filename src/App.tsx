@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSettings } from './db/db';
 import { applyTheme, useHashRoute } from './lib/hooks';
+import { setTopOverride } from './lib/viewport';
 import { LiveMatch } from './screens/LiveMatch';
 import { MatchList } from './screens/MatchList';
 import { MatchSetup } from './screens/MatchSetup';
@@ -14,6 +15,10 @@ export function App() {
   useEffect(() => {
     if (settings) applyTheme(settings.theme);
   }, [settings?.theme]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (settings) setTopOverride(settings.topOffset);
+  }, [settings?.topOffset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!settings) return null;
 

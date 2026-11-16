@@ -31,4 +31,5 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultHalfLength: 45,
   theme: 'auto',
   lastBackupAt: null,
+  topOffset: null,
 };

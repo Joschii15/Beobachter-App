@@ -6,6 +6,7 @@ import { DEFAULT_CATEGORIES_SR, DEFAULT_CATEGORIES_SRA, DISCIPLINE_ID } from '..
 import type { Category, Settings, ThemeSetting } from '../domain/types';
 import { shareOrDownload } from '../lib/files';
 import { navigate } from '../lib/hooks';
+import { currentTopExtra } from '../lib/viewport';
 
 const THEMES: { value: ThemeSetting; label: string }[] = [
   { value: 'auto', label: 'Automatisch' },
@@ -102,6 +103,9 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState('');
 
+  const nudgeTop = (delta: number) =>
+    saveSettings({ topOffset: Math.min(120, Math.max(0, (settings.topOffset ?? currentTopExtra()) + delta)) });
+
   const exportBackup = async () => {
     const { blob, filename } = await buildBackup();
     await shareOrDownload(blob, filename, 'Sicherung SR-Beobachter');
@@ -152,6 +156,28 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
                 {t.label}
               </button>
             ))}
+          </div>
+          <div className="field">
+            <span>Abstand oben (iPhone)</span>
+            <div className="row">
+              <button className="btn small" onClick={() => nudgeTop(-4)} aria-label="Kopfzeile höher setzen">
+                ↑ höher
+              </button>
+              <button className="btn small" onClick={() => nudgeTop(4)} aria-label="Kopfzeile tiefer setzen">
+                ↓ tiefer
+              </button>
+              <button
+                className="btn small grow"
+                disabled={settings.topOffset === null}
+                onClick={() => saveSettings({ topOffset: null })}
+              >
+                {settings.topOffset === null ? 'Automatisch' : `${settings.topOffset} px · zurücksetzen`}
+              </button>
+            </div>
+            <p className="small muted">
+              iOS zeichnet bei Homescreen-Apps den oberen Bildschirmrand weich. Schiebe die Kopfzeile so weit nach
+              oben, bis die Schrift gerade noch scharf ist.
+            </p>
           </div>
           <label className="field">
             <span>Standard-Halbzeitlänge in Minuten</span>

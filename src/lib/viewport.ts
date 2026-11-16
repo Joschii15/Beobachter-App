@@ -17,6 +17,24 @@ function safeAreaTop(): number {
   return value;
 }
 
+/** Vom Nutzer eingestellter Abstand oben in Pixeln; null = automatisch */
+let override: number | null = null;
+
+/** Automatischer Abstand im Fehlerfall: etwas weniger als die Lücke, damit oben kein Platz verschenkt wird. */
+export function autoTopExtra(gap: number): number {
+  return Math.max(0, Math.round(gap) - 14);
+}
+
+/** Aktuell wirksamer Zusatzabstand – Ausgangswert für die Feineinstellung. */
+export function currentTopExtra(): number {
+  return parseFloat(document.documentElement.style.getPropertyValue('--top-extra')) || 0;
+}
+
+export function setTopOverride(value: number | null): void {
+  override = value;
+  fit();
+}
+
 function fit(): void {
   const root = document.documentElement;
   const standalone =
@@ -27,13 +45,13 @@ function fit(): void {
   if (keyboardOpen) return;
 
   const gap = window.screen.height - window.innerHeight;
-  if (standalone && portrait && gap >= 20 && gap <= 80 && safeAreaTop() > 0) {
-    root.style.setProperty('--top-extra', `${gap}px`);
-    root.style.setProperty('--safe-bottom', '0px');
-  } else {
-    root.style.removeProperty('--top-extra');
-    root.style.removeProperty('--safe-bottom');
-  }
+  const affected = standalone && portrait && gap >= 20 && gap <= 80 && safeAreaTop() > 0;
+  if (affected) root.style.setProperty('--safe-bottom', '0px');
+  else root.style.removeProperty('--safe-bottom');
+
+  const extra = override ?? (affected ? autoTopExtra(gap) : 0);
+  if (extra > 0) root.style.setProperty('--top-extra', `${extra}px`);
+  else root.style.removeProperty('--top-extra');
 }
 
 export function watchViewport(): void {
