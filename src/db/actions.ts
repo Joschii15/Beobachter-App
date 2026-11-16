@@ -92,6 +92,7 @@ export async function addEvent(
     period: cv.period ?? 'H1',
     minute: cv.minute,
     stoppage: cv.stoppage,
+    ...(cv.period ? { sec: cv.displaySeconds } : {}),
     ...data,
     id: uid(),
     matchId: match.id,

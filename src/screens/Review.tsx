@@ -3,7 +3,7 @@ import { NoteRow } from '../components/NoteRow';
 import { NoteSheet } from '../components/NoteSheet';
 import { addEvent, deleteEvent, updateSummary } from '../db/actions';
 import { useEvents, useMatch } from '../db/db';
-import { formatMinuteDot } from '../domain/clock';
+import { eventTime } from '../domain/clock';
 import {
   cardEvents,
   foulStats,
@@ -124,8 +124,8 @@ export function Review({ id, settings }: { id: string; settings: Settings }) {
     }
   };
 
-  const addManualNote = async (person: Person) => {
-    const e = await addEvent(match, { type: 'note', person });
+  const addManualNote = async (person: Person, general = false) => {
+    const e = await addEvent(match, { type: 'note', person, ...(general ? { general: true } : {}) });
     setEditing(e.id);
   };
 
@@ -196,8 +196,10 @@ export function Review({ id, settings }: { id: string; settings: Settings }) {
         {tab !== 'game' &&
           (() => {
             const person = tab;
-            const notes = sortEvents(events.filter((e) => e.type === 'note' && e.person === person));
-            const rc = ratingCounts(notes);
+            const all = events.filter((e) => e.type === 'note' && e.person === person);
+            const general = all.filter((e) => e.general).sort((a, b) => a.createdAt - b.createdAt);
+            const notes = sortEvents(all.filter((e) => !e.general));
+            const rc = ratingCounts(all);
             return (
               <>
                 <section className="card block" key={`sum-${person}`}>
@@ -219,7 +221,24 @@ export function Review({ id, settings }: { id: string; settings: Settings }) {
 
                 <div className="row">
                   <div className="section-title" style={{ flex: 1 }}>
-                    {notes.length} {notes.length === 1 ? 'Notiz' : 'Notizen'} · +{rc.pos} / –{rc.neg} / ○{rc.neu}
+                    Allgemeine Hinweise
+                  </div>
+                  <button className="btn small" onClick={() => addManualNote(person, true)}>
+                    + Hinweis
+                  </button>
+                </div>
+                <div className="list">
+                  {general.map((e) => (
+                    <NoteRow key={e.id} event={e} cfg={match} onClick={() => setEditing(e.id)} />
+                  ))}
+                  {general.length === 0 && (
+                    <p className="small muted">Hinweise ohne Zeitangabe, z. B. zum Auftreten über das ganze Spiel.</p>
+                  )}
+                </div>
+
+                <div className="row">
+                  <div className="section-title" style={{ flex: 1 }}>
+                    {notes.length} {notes.length === 1 ? 'Szene' : 'Szenen'} · gesamt +{rc.pos} / –{rc.neg} / ○{rc.neu}
                   </div>
                   <button className="btn small" onClick={() => addManualNote(person)}>
                     + Notiz
@@ -227,9 +246,9 @@ export function Review({ id, settings }: { id: string; settings: Settings }) {
                 </div>
                 <div className="list">
                   {notes.map((e) => (
-                    <NoteRow key={e.id} event={e} onClick={() => setEditing(e.id)} />
+                    <NoteRow key={e.id} event={e} cfg={match} onClick={() => setEditing(e.id)} />
                   ))}
-                  {notes.length === 0 && <p className="small muted">Keine Notizen für {PERSON_LABEL[person]}.</p>}
+                  {notes.length === 0 && <p className="small muted">Keine Szenen für {PERSON_LABEL[person]}.</p>}
                 </div>
               </>
             );
@@ -253,7 +272,7 @@ export function Review({ id, settings }: { id: string; settings: Settings }) {
               {goals.length === 0 && <p className="small muted">Keine Tore erfasst.</p>}
               {goals.map(({ event, score: sc }) => (
                 <div className="row" key={event.id}>
-                  <span style={{ minWidth: 48, fontWeight: 700 }}>{formatMinuteDot(event.minute, event.stoppage)}</span>
+                  <span style={{ minWidth: 64, fontWeight: 700 }}>{eventTime(match, event)}</span>
                   <span style={{ flex: 1 }}>
                     {sc} · {event.team === 'H' ? match.home || 'Heim' : match.away || 'Gast'}
                   </span>
@@ -274,7 +293,7 @@ export function Review({ id, settings }: { id: string; settings: Settings }) {
               {cards.length === 0 && <p className="small muted">Keine Karten erfasst.</p>}
               {cards.map((e) => (
                 <button key={e.id} className="row" style={{ border: 0, background: 'none', padding: 0, textAlign: 'left' }} onClick={() => setEditing(e.id)}>
-                  <span style={{ minWidth: 48, fontWeight: 700 }}>{formatMinuteDot(e.minute, e.stoppage)}</span>
+                  <span style={{ minWidth: 64, fontWeight: 700 }}>{eventTime(match, e)}</span>
                   <span className="pcard">
                     <i className={e.card} />
                     {CARD_LABEL[e.card!]} {e.playerNo || '?'}

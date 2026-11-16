@@ -66,9 +66,22 @@
 }
 
 html,
-body,
-#root {
+body {
   height: 100%;
+  overflow: hidden;
+}
+
+/*
+ * Die App füllt immer den ganzen Bildschirm und scrollt nur innerhalb ihrer Bereiche.
+ * --app-h gleicht einen iOS-Fehler aus, bei dem Homescreen-Apps zu niedrig gemessen werden
+ * (siehe lib/viewport.ts).
+ */
+#root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--app-h, 100%);
 }
 
 body {
@@ -132,6 +145,13 @@ p {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Elemente in scrollenden Spalten dürfen nicht zusammengedrückt werden (sonst verschwinden z. B. die Reiter) */
+.content > *,
+.sheet-body > *,
+.live > :not(.recent) {
+  flex-shrink: 0;
 }
 
 .content {
@@ -638,7 +658,7 @@ p {
 
 .note-row .min {
   flex: none;
-  min-width: 40px;
+  min-width: 50px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -762,7 +782,7 @@ p {
 /* ---------- Notiz-Blatt ---------- */
 
 .sheet {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 20;
   background: var(--bg);
@@ -818,7 +838,12 @@ p {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {

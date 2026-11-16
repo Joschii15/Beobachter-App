@@ -1,11 +1,10 @@
-import { PERIOD_ORDER } from './clock';
+import { eventSeconds, PERIOD_ORDER } from './clock';
 import type { CardType, MatchEvent, PeriodId, Team } from './types';
 
 export function compareEvents(a: MatchEvent, b: MatchEvent): number {
   return (
     PERIOD_ORDER.indexOf(a.period) - PERIOD_ORDER.indexOf(b.period) ||
-    a.minute - b.minute ||
-    a.stoppage - b.stoppage ||
+    eventSeconds(a) - eventSeconds(b) ||
     a.createdAt - b.createdAt
   );
 }

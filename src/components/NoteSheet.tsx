@@ -1,5 +1,13 @@
 import { deleteEvent, updateEvent } from '../db/actions';
-import { formatMinuteDot, periodBase, periodForMinute, periodLength } from '../domain/clock';
+import { useEffect, useState } from 'react';
+import {
+  eventSeconds,
+  eventTime,
+  formatClock,
+  PERIOD_ORDER,
+  periodBase,
+  timeFields,
+} from '../domain/clock';
 import { DISCIPLINE_ID } from '../domain/defaults';
 import { hasPriorYellow } from '../domain/stats';
 import {
@@ -8,6 +16,7 @@ import {
   type CardType,
   type Match,
   type MatchEvent,
+  type PeriodId,
   type Rating,
   type Settings,
   type Team,
@@ -30,6 +39,16 @@ const RATINGS: { value: Rating; label: string; cls: string }[] = [
   { value: 'neg', label: '– Negativ', cls: 'neg' },
 ];
 
+const PERIOD_SHORT: Record<PeriodId, string> = { H1: '1. HZ', H2: '2. HZ', ET1: '1. Verl.', ET2: '2. Verl.' };
+
+/** "10:30" oder "10" → Sekunden; null bei ungültiger Eingabe */
+function parseClock(input: string): number | null {
+  const m = input.trim().match(/^(\d{1,3})(?:[:.,](\d{1,2}))?$/);
+  if (!m) return null;
+  const s = Number(m[2] ?? 0);
+  return s > 59 ? null : Number(m[1]) * 60 + s;
+}
+
 const CARDS: { value: CardType; cls: string }[] = [
   { value: 'Y', cls: 'yellow' },
   { value: 'YR', cls: 'yellow' },
@@ -42,6 +61,11 @@ export function NoteSheet({ match, events, settings, eventId, allowTimeEdit, onC
 
   const text = useDraft(ev?.text ?? '', (v) => void updateEvent(eventId, { text: v }));
   const playerNo = useDraft(ev?.playerNo ?? '', (v) => void updateEvent(eventId, { playerNo: v.trim() }), 250);
+
+  // Zeitfeld für die Korrektur von Hand
+  const shownClock = ev ? formatClock(eventSeconds(ev)) : '';
+  const [clockText, setClockText] = useState(shownClock);
+  useEffect(() => setClockText(shownClock), [shownClock]);
 
   if (!ev) return null;
 
@@ -64,11 +88,16 @@ export function NoteSheet({ match, events, settings, eventId, allowTimeEdit, onC
     onClose();
   };
 
-  const setMinute = (minute: number, stoppage: number) => {
-    const m = Math.max(0, Math.round(minute) || 0);
-    const period = periodForMinute(match, Math.max(1, m));
-    const atEnd = m === periodBase(match, period) + periodLength(match, period);
-    patch({ minute: m, period, stoppage: atEnd ? Math.max(0, Math.round(stoppage) || 0) : 0 });
+  const periods = PERIOD_ORDER.filter(
+    (p) => p === 'H1' || p === 'H2' || match.extraTimeAllowed || match.periods.some((x) => x.id === p),
+  );
+  const clockValid = parseClock(clockText) !== null;
+
+  /** Übernimmt Abschnitt und Uhrzeit; eine Zeit jenseits der regulären Dauer zählt als Nachspielzeit. */
+  const applyTime = (period: PeriodId, text: string) => {
+    const sec = parseClock(text);
+    if (sec === null) return;
+    patch(timeFields(match, period, Math.max(sec, periodBase(match, period) * 60)));
   };
 
   const teamName = (t: Team) => (t === 'H' ? match.home || 'Heim' : match.away || 'Gast');
@@ -78,7 +107,7 @@ export function NoteSheet({ match, events, settings, eventId, allowTimeEdit, onC
       <div className="sheet-inner">
         <header className="sheet-head">
           <h2>
-            {PERSON_LABEL[ev.person ?? 'SR']} · {formatMinuteDot(ev.minute, ev.stoppage)}
+            {PERSON_LABEL[ev.person ?? 'SR']} · {eventTime(match, ev)}
           </h2>
           <button className="btn ghost danger" onClick={remove}>
             Löschen
@@ -89,36 +118,52 @@ export function NoteSheet({ match, events, settings, eventId, allowTimeEdit, onC
         </header>
 
         <div className="sheet-body">
-          {allowTimeEdit && (
-            <div className="block">
-              <div className="section-title">Minute</div>
-              <div className="row">
-                <input
-                  className="input"
-                  style={{ width: 90 }}
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  value={ev.minute || ''}
-                  onChange={(e) => setMinute(Number(e.target.value), ev.stoppage)}
-                  aria-label="Spielminute"
-                />
-                <span className="muted">+</span>
-                <input
-                  className="input"
-                  style={{ width: 76 }}
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  value={ev.stoppage || ''}
-                  onChange={(e) => setMinute(ev.minute, Number(e.target.value))}
-                  aria-label="Nachspielzeit"
-                  placeholder="0"
-                />
-                <span className="small muted">Nachspielzeit nur am Ende eines Abschnitts</span>
-              </div>
-            </div>
-          )}
+          <div className="block">
+            <label className="switch-row">
+              <span>
+                Allgemeiner Hinweis
+                <span className="small muted" style={{ display: 'block' }}>
+                  ohne Zeitangabe, z. B. zum Auftreten über das ganze Spiel
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={!!ev.general}
+                onChange={(e) => patch({ general: e.target.checked ? true : undefined })}
+              />
+            </label>
+
+            {allowTimeEdit && !ev.general && (
+              <>
+                <div className="section-title">Zeit korrigieren</div>
+                <div className="row">
+                  <div className="segmented" style={{ flex: 1, minWidth: 0 }}>
+                    {periods.map((p) => (
+                      <button key={p} className={ev.period === p ? 'on' : ''} onClick={() => applyTime(p, clockText)}>
+                        {PERIOD_SHORT[p]}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    className="input"
+                    style={{ width: 96, textAlign: 'center', borderColor: clockValid ? undefined : 'var(--neg)' }}
+                    inputMode="numeric"
+                    placeholder="mm:ss"
+                    value={clockText}
+                    onChange={(e) => {
+                      setClockText(e.target.value);
+                      applyTime(ev.period, e.target.value);
+                    }}
+                    aria-label="Spielzeit als Minuten und Sekunden"
+                  />
+                </div>
+                <p className="small muted">
+                  Zeit auf der durchlaufenden Uhr, z. B. 10:30 oder 52:15. Nachspielzeit: 1. HZ mit 46:30 ergibt
+                  45+1:30.
+                </p>
+              </>
+            )}
+          </div>
 
           <div className="segmented">
             {RATINGS.map((r) => (

@@ -1,4 +1,4 @@
-import { formatMinuteDot } from '../domain/clock';
+import { eventTime, type ClockConfig } from '../domain/clock';
 import { isOpenMarker } from '../domain/stats';
 import { CARD_LABEL, PERSON_LABEL, type MatchEvent } from '../domain/types';
 
@@ -16,18 +16,19 @@ export function cardTag(e: MatchEvent): string {
 
 interface Props {
   event: MatchEvent;
+  cfg: ClockConfig;
   showPerson?: boolean;
   clamp?: boolean;
   onClick: () => void;
 }
 
-export function NoteRow({ event, showPerson, clamp, onClick }: Props) {
+export function NoteRow({ event, cfg, showPerson, clamp, onClick }: Props) {
   const { sign, cls } = ratingSign(event);
   const open = isOpenMarker(event);
   const tag = cardTag(event);
   return (
     <button className={`note-row ${clamp ? 'clamp' : ''}`} onClick={onClick}>
-      <span className="min">{formatMinuteDot(event.minute, event.stoppage)}</span>
+      <span className="min">{eventTime(cfg, event)}</span>
       {showPerson && <span className="who">{PERSON_LABEL[event.person ?? 'SR']}</span>}
       <span className={`sign ${cls}`}>{sign}</span>
       <span className="body">

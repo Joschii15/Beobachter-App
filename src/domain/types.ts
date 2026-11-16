@@ -56,6 +56,10 @@ export interface MatchEvent {
   minute: number;
   /** Nachspielzeit-Minute, z. B. 2 bei 45+2 */
   stoppage: number;
+  /** Exakte Spielzeit in Sekunden auf der durchlaufenden Uhr (10:30 = 630; 2. Halbzeit beginnt bei 45:00) */
+  sec?: number;
+  /** Allgemeiner Hinweis ohne Zeitbezug */
+  general?: boolean;
   person?: Person;
   category?: string;
   rating?: Rating;

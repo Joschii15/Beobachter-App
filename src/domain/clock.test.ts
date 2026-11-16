@@ -3,12 +3,15 @@ import {
   adjustClock,
   clockView,
   endPeriod,
+  eventTime,
   formatClock,
+  formatExact,
   formatMinute,
   minuteAt,
   nextPeriod,
   periodForMinute,
   startPeriod,
+  timeFields,
   togglePause,
 } from './clock';
 import type { PeriodState } from './types';
@@ -124,6 +127,30 @@ describe('Formatierung', () => {
     expect(formatMinute(0, 0)).toBe('vor');
     expect(formatClock(45 * 60 + 7)).toBe('45:07');
     expect(formatClock(125 * 60)).toBe('125:00');
+  });
+
+  it('formatiert die exakte Spielzeit', () => {
+    expect(formatExact(cfg, 'H1', 630)).toBe('10:30');
+    expect(formatExact(cfg, 'H1', 45 * 60 + 90)).toBe('45+1:30');
+    expect(formatExact(cfg, 'H2', 45 * 60 + 90)).toBe('46:30');
+    expect(formatExact(cfg, 'H2', 90 * 60 + 5)).toBe('90+0:05');
+    expect(eventTime(cfg, { period: 'H1', minute: 11, stoppage: 0, sec: 630 })).toBe('10:30');
+    expect(eventTime(cfg, { period: 'H1', minute: 11, stoppage: 0 })).toBe('11.');
+    expect(eventTime(cfg, { period: 'H1', minute: 11, stoppage: 0, sec: 630, general: true })).toBe('allg.');
+  });
+
+  it('rechnet eine von Hand eingegebene Zeit um', () => {
+    expect(timeFields(cfg, 'H1', 630)).toEqual({ period: 'H1', sec: 630, minute: 11, stoppage: 0 });
+    expect(timeFields(cfg, 'H1', 46 * 60 + 30)).toEqual({ period: 'H1', sec: 2790, minute: 45, stoppage: 2 });
+    expect(timeFields(cfg, 'H2', 52 * 60 + 15)).toEqual({ period: 'H2', sec: 3135, minute: 53, stoppage: 0 });
+    // Zeit vor Beginn des Abschnitts wird auf dessen Anfang gesetzt
+    expect(timeFields(cfg, 'H2', 600)).toEqual({ period: 'H2', sec: 2700, minute: 46, stoppage: 0 });
+  });
+
+  it('liefert die exakte Zeit der laufenden Uhr', () => {
+    let m = base();
+    m = { ...m, periods: startPeriod(m, 0) };
+    expect(clockView(m, 630_000).displaySeconds).toBe(630);
   });
 
   it('ordnet eine Minute dem Abschnitt zu', () => {

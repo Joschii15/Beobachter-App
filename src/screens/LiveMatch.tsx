@@ -256,7 +256,7 @@ export function LiveMatch({ id, settings }: { id: string; settings: Settings }) 
 
         <div className="recent">
           {recent.map((e) => (
-            <NoteRow key={e.id} event={e} showPerson clamp onClick={() => setEditing(e.id)} />
+            <NoteRow key={e.id} event={e} cfg={match} showPerson clamp onClick={() => setEditing(e.id)} />
           ))}
           {recent.length === 0 && (
             <p className="small muted" style={{ textAlign: 'center', padding: 12 }}>

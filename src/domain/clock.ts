@@ -169,6 +169,48 @@ export function formatMinuteDot(minute: number, stoppage: number): string {
   return `${formatMinute(minute, stoppage)}.`;
 }
 
+/**
+ * Exakte Spielzeit eines Eintrags: "10:30", in der Nachspielzeit "45+1:30".
+ * `sec` ist die Zeit auf der durchlaufenden Uhr.
+ */
+export function formatExact(cfg: ClockConfig, period: PeriodId, sec: number): string {
+  const end = (periodBase(cfg, period) + periodLength(cfg, period)) * 60;
+  if (sec < end) return formatClock(Math.max(0, sec));
+  const over = sec - end;
+  return `${end / 60}+${Math.floor(over / 60)}:${String(over % 60).padStart(2, '0')}`;
+}
+
+interface Timed {
+  period: PeriodId;
+  minute: number;
+  stoppage: number;
+  sec?: number;
+  general?: boolean;
+}
+
+/** Zeitangabe für Listen und PDF. Ältere Einträge ohne Sekunden zeigen die Spielminute. */
+export function eventTime(cfg: ClockConfig, e: Timed): string {
+  if (e.general) return 'allg.';
+  if (e.sec !== undefined) return formatExact(cfg, e.period, e.sec);
+  return formatMinuteDot(e.minute, e.stoppage);
+}
+
+/** Position auf der durchlaufenden Uhr – auch für ältere Einträge ohne Sekunden. */
+export function eventSeconds(e: Timed): number {
+  return e.sec ?? Math.max(0, e.minute - 1 + e.stoppage) * 60;
+}
+
+/** Rechnet eine Uhrzeit des Abschnitts in Minute/Nachspielzeit um (für die Korrektur von Hand). */
+export function timeFields(
+  cfg: ClockConfig,
+  period: PeriodId,
+  sec: number,
+): { period: PeriodId; sec: number; minute: number; stoppage: number } {
+  const base = periodBase(cfg, period) * 60;
+  const clamped = Math.max(base, Math.round(sec));
+  return { period, sec: clamped, ...minuteAt(cfg, period, (clamped - base) * 1000) };
+}
+
 export function formatClock(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;

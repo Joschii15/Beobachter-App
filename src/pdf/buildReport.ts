@@ -1,12 +1,14 @@
 import { jsPDF } from 'jspdf';
 import autoTable, { type CellHookData, type RowInput } from 'jspdf-autotable';
 import {
+  eventTime,
   formatMinuteDot,
   minuteAt,
   PERIOD_LABEL,
   PERIOD_ORDER,
   periodBase,
   periodElapsedMs,
+  periodLength,
 } from '../domain/clock';
 import {
   cardCounts,
@@ -68,7 +70,7 @@ function noteText(e: MatchEvent): string {
 }
 
 function colorSign(data: CellHookData, column: number): void {
-  if (data.section !== 'body' || data.column.index !== column) return;
+  if (data.section !== 'body' || data.column.index !== column || data.cell.colSpan > 1) return;
   const v = String(data.cell.raw ?? '');
   if (v === '+') data.cell.styles.textColor = GREEN;
   else if (v === '-') data.cell.styles.textColor = RED;
@@ -208,7 +210,51 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
         .join('; ')}`,
     );
   }
-  y += 5;
+  y += 3;
+
+  // ---------- Foulspiele im Zeitverlauf ----------
+  const foulEvents = sortEvents(events.filter((e) => e.type === 'foul' && e.team));
+  if (foulEvents.length) {
+    const STEP = 15;
+    const rows: RowInput[] = [];
+    for (const id of PERIOD_ORDER) {
+      const inPeriod = foulEvents.filter((e) => e.period === id);
+      if (!match.periods.some((p) => p.id === id) && inPeriod.length === 0) continue;
+      const base = periodBase(match, id);
+      const len = periodLength(match, id);
+      const buckets = Math.ceil(len / STEP);
+      for (let i = 0; i < buckets; i++) {
+        const last = i === buckets - 1;
+        const list = inPeriod.filter((e) => {
+          const idx = Math.min(buckets - 1, Math.max(0, Math.floor((e.minute - base - 1) / STEP)));
+          return idx === i;
+        });
+        const cell = (t: Team) => {
+          const mine = list.filter((e) => e.team === t);
+          return mine.length ? `${mine.length}   (${mine.map((e) => eventTime(match, e)).join(', ')})` : '0';
+        };
+        const from = base + i * STEP + 1;
+        const to = Math.min(base + (i + 1) * STEP, base + len);
+        rows.push([`${from}.-${to}.${last ? ' + Nachspielzeit' : ''}`, cell('H'), cell('G')]);
+      }
+    }
+    ensure(30);
+    line('Foulspiele im Zeitverlauf', { bold: true, size: 10 });
+    y += 1;
+    autoTable(doc, {
+      startY: y,
+      margin: { left: MARGIN, right: MARGIN, bottom: 18 },
+      head: [['Spielminuten', home, away]],
+      body: rows,
+      theme: 'grid',
+      styles: { fontSize: 8.5, cellPadding: 1.6, textColor: INK, lineColor: [200, 208, 204], valign: 'top' },
+      headStyles: { fillColor: LIGHT, textColor: INK, fontStyle: 'bold' },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold' } },
+      rowPageBreak: 'avoid',
+    });
+    y = lastY() + 3;
+  }
+  y += 4;
 
   // ---------- Je Person ----------
   const personSection = (person: Person) => {
@@ -233,19 +279,47 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
       y = lastY() + 3;
     }
 
-    const notes = sortEvents(events.filter((e) => e.type === 'note' && e.person === person));
-    if (notes.length === 0) {
+    const all = events.filter((e) => e.type === 'note' && e.person === person);
+    if (all.length === 0) {
       line('Keine Notizen erfasst.', { color: MUTED });
       y += 6;
       return;
     }
 
-    const rc = ratingCounts(notes);
-    line(`${notes.length} ${notes.length === 1 ? 'Notiz' : 'Notizen'}:  positiv ${rc.pos}  |  negativ ${rc.neg}  |  neutral ${rc.neu}`, {
+    const rc = ratingCounts(all);
+    line(`${all.length} ${all.length === 1 ? 'Notiz' : 'Notizen'}:  positiv ${rc.pos}  |  negativ ${rc.neg}  |  neutral ${rc.neu}`, {
       color: MUTED,
       size: 9,
     });
     y += 1;
+
+    // Allgemeine Hinweise ohne Zeitbezug stehen vor den Einzelszenen
+    const general = all.filter((e) => e.general).sort((a, b) => a.createdAt - b.createdAt);
+    if (general.length) {
+      autoTable(doc, {
+        startY: y,
+        margin: { left: MARGIN, right: MARGIN, bottom: 18 },
+        theme: 'grid',
+        body: [
+          [{ content: 'Allgemeine Hinweise', colSpan: 2, styles: { fontStyle: 'bold', fillColor: LIGHT, textColor: INK } }],
+          ...general.map((n): RowInput => {
+            const cat = clean(n.category);
+            return [sign(n), `${cat ? `${cat}: ` : ''}${noteText(n)}`];
+          }),
+        ],
+        styles: { fontSize: 9.5, cellPadding: 1.8, textColor: INK, lineColor: [215, 221, 218], valign: 'top' },
+        columnStyles: { 0: { cellWidth: 8, halign: 'center' } },
+        didParseCell: (d) => colorSign(d, 0),
+        rowPageBreak: 'avoid',
+      });
+      y = lastY() + 3;
+    }
+
+    const notes = sortEvents(all.filter((e) => !e.general));
+    if (notes.length === 0) {
+      y += 5;
+      return;
+    }
 
     // Reihenfolge wie in den Einstellungen, danach unbekannte Kategorien, zuletzt "Ohne Kategorie"
     const known = (person === 'SR' ? settings.categoriesSR : settings.categoriesSRA).map((c) => c.name);
@@ -271,7 +345,7 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
           styles: { fontStyle: 'bold', fillColor: LIGHT, textColor: INK },
         },
       ]);
-      for (const n of list) body.push([formatMinuteDot(n.minute, n.stoppage), sign(n), noteText(n)]);
+      for (const n of list) body.push([eventTime(match, n), sign(n), noteText(n)]);
     }
 
     autoTable(doc, {
@@ -280,7 +354,7 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
       theme: 'grid',
       body,
       styles: { fontSize: 9.5, cellPadding: 1.8, textColor: INK, lineColor: [215, 221, 218], valign: 'top' },
-      columnStyles: { 0: { cellWidth: 17, fontStyle: 'bold' }, 1: { cellWidth: 8, halign: 'center' } },
+      columnStyles: { 0: { cellWidth: 21, fontStyle: 'bold' }, 1: { cellWidth: 8, halign: 'center' } },
       didParseCell: (d) => colorSign(d, 1),
       rowPageBreak: 'avoid',
     });
@@ -297,7 +371,7 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
   const marker = (text: string): RowInput => [
     { content: text, colSpan: 4, styles: { fontStyle: 'bold', fillColor: LIGHT, textColor: INK } },
   ];
-  const sorted = sortEvents(events.filter((e) => e.type !== 'foul'));
+  const sorted = sortEvents(events.filter((e) => e.type !== 'foul' && !e.general));
   let h = 0;
   let g = 0;
   for (const id of PERIOD_ORDER) {
@@ -306,7 +380,7 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
     if (!period && inPeriod.length === 0) continue;
     if (period) timeline.push(marker(`Beginn ${PERIOD_LABEL[id]} (${periodBase(match, id) + 1}.)`));
     for (const e of inPeriod) {
-      const min = formatMinuteDot(e.minute, e.stoppage);
+      const min = eventTime(match, e);
       if (e.type === 'goal') {
         if (e.team === 'H') h++;
         else g++;
@@ -329,11 +403,11 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
       startY: y,
       margin: { left: MARGIN, right: MARGIN, bottom: 18 },
       theme: 'grid',
-      head: [['Min.', 'Wer', '', 'Eintrag']],
+      head: [['Zeit', 'Wer', '', 'Eintrag']],
       body: timeline,
       styles: { fontSize: 9, cellPadding: 1.6, textColor: INK, lineColor: [215, 221, 218], valign: 'top' },
       headStyles: { fillColor: INK, textColor: [255, 255, 255] },
-      columnStyles: { 0: { cellWidth: 17, fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 8, halign: 'center' } },
+      columnStyles: { 0: { cellWidth: 21, fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 8, halign: 'center' } },
       didParseCell: (d) => colorSign(d, 2),
       rowPageBreak: 'avoid',
     });
