@@ -98,16 +98,14 @@ export function MatchSetup({ settings, editId }: { settings: Settings; editId?: 
             <span>Gast</span>
             <input className="input" value={form.away} onChange={(e) => set('away', e.target.value)} autoCapitalize="words" />
           </label>
-          <div className="grid-2">
-            <label className="field">
-              <span>Datum</span>
-              <input className="input" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Spielklasse</span>
-              <input className="input" value={form.league} onChange={(e) => set('league', e.target.value)} />
-            </label>
-          </div>
+          <label className="field">
+            <span>Datum</span>
+            <input className="input" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
+          </label>
+          <label className="field">
+            <span>Spielklasse</span>
+            <input className="input" value={form.league} onChange={(e) => set('league', e.target.value)} />
+          </label>
           <label className="field">
             <span>Spielort</span>
             <input className="input" value={form.venue} onChange={(e) => set('venue', e.target.value)} />

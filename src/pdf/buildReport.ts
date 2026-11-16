@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable, { type CellHookData, type RowInput } from 'jspdf-autotable';
 import {
-  eventTime,
+  formatExact,
   formatMinuteDot,
   minuteAt,
   PERIOD_LABEL,
@@ -127,6 +127,12 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
   const home = clean(match.home) || 'Heim';
   const away = clean(match.away) || 'Gast';
   const teamName = (t: Team) => (t === 'H' ? home : away);
+  /** Spielminute nach DFB-Schreibweise, dahinter der exakte Timecode: "37. (36:12)" */
+  const pdfTime = (e: MatchEvent): string => {
+    if (e.general) return 'allg.';
+    const minute = formatMinuteDot(e.minute, e.stoppage);
+    return e.sec !== undefined ? `${minute} (${formatExact(match, e.period, e.sec)})` : minute;
+  };
   const persons = personsOf(match);
   const started = match.periods.length > 0;
 
@@ -212,48 +218,6 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
   }
   y += 3;
 
-  // ---------- Foulspiele im Zeitverlauf ----------
-  const foulEvents = sortEvents(events.filter((e) => e.type === 'foul' && e.team));
-  if (foulEvents.length) {
-    const STEP = 15;
-    const rows: RowInput[] = [];
-    for (const id of PERIOD_ORDER) {
-      const inPeriod = foulEvents.filter((e) => e.period === id);
-      if (!match.periods.some((p) => p.id === id) && inPeriod.length === 0) continue;
-      const base = periodBase(match, id);
-      const len = periodLength(match, id);
-      const buckets = Math.ceil(len / STEP);
-      for (let i = 0; i < buckets; i++) {
-        const last = i === buckets - 1;
-        const list = inPeriod.filter((e) => {
-          const idx = Math.min(buckets - 1, Math.max(0, Math.floor((e.minute - base - 1) / STEP)));
-          return idx === i;
-        });
-        const cell = (t: Team) => {
-          const mine = list.filter((e) => e.team === t);
-          return mine.length ? `${mine.length}   (${mine.map((e) => eventTime(match, e)).join(', ')})` : '0';
-        };
-        const from = base + i * STEP + 1;
-        const to = Math.min(base + (i + 1) * STEP, base + len);
-        rows.push([`${from}.-${to}.${last ? ' + Nachspielzeit' : ''}`, cell('H'), cell('G')]);
-      }
-    }
-    ensure(30);
-    line('Foulspiele im Zeitverlauf', { bold: true, size: 10 });
-    y += 1;
-    autoTable(doc, {
-      startY: y,
-      margin: { left: MARGIN, right: MARGIN, bottom: 18 },
-      head: [['Spielminuten', home, away]],
-      body: rows,
-      theme: 'grid',
-      styles: { fontSize: 8.5, cellPadding: 1.6, textColor: INK, lineColor: [200, 208, 204], valign: 'top' },
-      headStyles: { fillColor: LIGHT, textColor: INK, fontStyle: 'bold' },
-      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold' } },
-      rowPageBreak: 'avoid',
-    });
-    y = lastY() + 3;
-  }
   y += 4;
 
   // ---------- Je Person ----------
@@ -345,7 +309,7 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
           styles: { fontStyle: 'bold', fillColor: LIGHT, textColor: INK },
         },
       ]);
-      for (const n of list) body.push([eventTime(match, n), sign(n), noteText(n)]);
+      for (const n of list) body.push([pdfTime(n), sign(n), noteText(n)]);
     }
 
     autoTable(doc, {
@@ -354,7 +318,7 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
       theme: 'grid',
       body,
       styles: { fontSize: 9.5, cellPadding: 1.8, textColor: INK, lineColor: [215, 221, 218], valign: 'top' },
-      columnStyles: { 0: { cellWidth: 21, fontStyle: 'bold' }, 1: { cellWidth: 8, halign: 'center' } },
+      columnStyles: { 0: { cellWidth: 29, fontStyle: 'bold' }, 1: { cellWidth: 8, halign: 'center' } },
       didParseCell: (d) => colorSign(d, 1),
       rowPageBreak: 'avoid',
     });
@@ -380,7 +344,7 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
     if (!period && inPeriod.length === 0) continue;
     if (period) timeline.push(marker(`Beginn ${PERIOD_LABEL[id]} (${periodBase(match, id) + 1}.)`));
     for (const e of inPeriod) {
-      const min = eventTime(match, e);
+      const min = pdfTime(e);
       if (e.type === 'goal') {
         if (e.team === 'H') h++;
         else g++;
@@ -407,10 +371,54 @@ export function buildReport(match: Match, events: MatchEvent[], settings: Settin
       body: timeline,
       styles: { fontSize: 9, cellPadding: 1.6, textColor: INK, lineColor: [215, 221, 218], valign: 'top' },
       headStyles: { fillColor: INK, textColor: [255, 255, 255] },
-      columnStyles: { 0: { cellWidth: 21, fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 8, halign: 'center' } },
+      columnStyles: { 0: { cellWidth: 29, fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 8, halign: 'center' } },
       didParseCell: (d) => colorSign(d, 2),
       rowPageBreak: 'avoid',
     });
+  }
+
+  y = timeline.length ? lastY() : y;
+
+  // ---------- Foulspiele im Zeitverlauf ----------
+  const foulEvents = sortEvents(events.filter((e) => e.type === 'foul' && e.team));
+  if (foulEvents.length) {
+    const STEP = 15;
+    const rows: RowInput[] = [];
+    for (const id of PERIOD_ORDER) {
+      const inPeriod = foulEvents.filter((e) => e.period === id);
+      if (!match.periods.some((p) => p.id === id) && inPeriod.length === 0) continue;
+      const base = periodBase(match, id);
+      const len = periodLength(match, id);
+      const buckets = Math.ceil(len / STEP);
+      for (let i = 0; i < buckets; i++) {
+        const last = i === buckets - 1;
+        const list = inPeriod.filter((e) => {
+          const idx = Math.min(buckets - 1, Math.max(0, Math.floor((e.minute - base - 1) / STEP)));
+          return idx === i;
+        });
+        const cell = (t: Team) => {
+          const mine = list.filter((e) => e.team === t);
+          return mine.length ? `${mine.length}:   ${mine.map((e) => pdfTime(e)).join(', ')}` : '0';
+        };
+        const from = base + i * STEP + 1;
+        const to = Math.min(base + (i + 1) * STEP, base + len);
+        rows.push([`${from}.-${to}.${last ? ' + Nachspielzeit' : ''}`, cell('H'), cell('G')]);
+      }
+    }
+    y += 6;
+    heading('Anhang - Foulspiele im Zeitverlauf');
+    autoTable(doc, {
+      startY: y,
+      margin: { left: MARGIN, right: MARGIN, bottom: 18 },
+      head: [['Spielminuten', home, away]],
+      body: rows,
+      theme: 'grid',
+      styles: { fontSize: 8.5, cellPadding: 1.6, textColor: INK, lineColor: [200, 208, 204], valign: 'top' },
+      headStyles: { fillColor: LIGHT, textColor: INK, fontStyle: 'bold' },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold' } },
+      rowPageBreak: 'avoid',
+    });
+    y = lastY() + 3;
   }
 
   // ---------- Fußzeile ----------
