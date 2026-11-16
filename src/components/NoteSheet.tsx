@@ -1,4 +1,4 @@
-import { deleteEvent, updateEvent } from '../db/actions';
+import { deleteEvent, shiftEventTime, updateEvent } from '../db/actions';
 import { useEffect, useState } from 'react';
 import {
   eventSeconds,
@@ -100,6 +100,9 @@ export function NoteSheet({ match, events, settings, eventId, allowTimeEdit, onC
     patch(timeFields(match, period, Math.max(sec, periodBase(match, period) * 60)));
   };
 
+  /** Verschiebt die Zeit um einige Sekunden – für Marker, die zu spät gesetzt wurden. */
+  const shift = (deltaSec: number) => void shiftEventTime(ev.id, match, deltaSec);
+
   const teamName = (t: Team) => (t === 'H' ? match.home || 'Heim' : match.away || 'Gast');
 
   return (
@@ -133,20 +136,23 @@ export function NoteSheet({ match, events, settings, eventId, allowTimeEdit, onC
               />
             </label>
 
-            {allowTimeEdit && !ev.general && (
+            {!ev.general && (
               <>
                 <div className="section-title">Zeit korrigieren</div>
                 <div className="row">
-                  <div className="segmented" style={{ flex: 1, minWidth: 0 }}>
-                    {periods.map((p) => (
-                      <button key={p} className={ev.period === p ? 'on' : ''} onClick={() => applyTime(p, clockText)}>
-                        {PERIOD_SHORT[p]}
-                      </button>
-                    ))}
-                  </div>
+                  {[-60, -10, 10].map((d) => (
+                    <button
+                      key={d}
+                      className="btn small grow"
+                      onClick={() => shift(d)}
+                      aria-label={`Zeit um ${Math.abs(d)} Sekunden ${d < 0 ? 'zurück' : 'vor'}`}
+                    >
+                      {d === -60 ? '−1 min' : d < 0 ? `−${-d} s` : `+${d} s`}
+                    </button>
+                  ))}
                   <input
                     className="input"
-                    style={{ width: 96, textAlign: 'center', borderColor: clockValid ? undefined : 'var(--neg)' }}
+                    style={{ width: 92, textAlign: 'center', borderColor: clockValid ? undefined : 'var(--neg)' }}
                     inputMode="numeric"
                     placeholder="mm:ss"
                     value={clockText}
@@ -157,10 +163,21 @@ export function NoteSheet({ match, events, settings, eventId, allowTimeEdit, onC
                     aria-label="Spielzeit als Minuten und Sekunden"
                   />
                 </div>
-                <p className="small muted">
-                  Zeit auf der durchlaufenden Uhr, z. B. 10:30 oder 52:15. Nachspielzeit: 1. HZ mit 46:30 ergibt
-                  45+1:30.
-                </p>
+                {allowTimeEdit && (
+                  <>
+                    <div className="segmented">
+                      {periods.map((p) => (
+                        <button key={p} className={ev.period === p ? 'on' : ''} onClick={() => applyTime(p, clockText)}>
+                          {PERIOD_SHORT[p]}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="small muted">
+                      Zeit auf der durchlaufenden Uhr, z. B. 10:30 oder 52:15. Nachspielzeit: 1. HZ mit 46:30 ergibt
+                      45+1:30.
+                    </p>
+                  </>
+                )}
               </>
             )}
           </div>

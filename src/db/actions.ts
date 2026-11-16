@@ -1,4 +1,14 @@
-import { adjustClock, clockView, endPeriod, reopenPeriod, startPeriod, togglePause } from '../domain/clock';
+import {
+  adjustClock,
+  clockView,
+  endPeriod,
+  eventSeconds,
+  reopenPeriod,
+  startPeriod,
+  timeFields,
+  togglePause,
+  type ClockConfig,
+} from '../domain/clock';
 import { compareEvents } from '../domain/stats';
 import {
   emptySummary,
@@ -104,6 +114,19 @@ export async function addEvent(
 
 export async function updateEvent(id: string, patch: Partial<MatchEvent>): Promise<void> {
   await db.events.update(id, patch);
+}
+
+/**
+ * Verschiebt die Zeit eines Eintrags um einige Sekunden. Liest den aktuellen Stand
+ * in der Transaktion, damit mehrere schnelle Tipps sich addieren.
+ */
+export async function shiftEventTime(id: string, cfg: ClockConfig, deltaSec: number): Promise<void> {
+  await db.events
+    .where('id')
+    .equals(id)
+    .modify((e) => {
+      Object.assign(e, timeFields(cfg, e.period, eventSeconds(e) + deltaSec));
+    });
 }
 
 export async function deleteEvent(id: string): Promise<void> {
